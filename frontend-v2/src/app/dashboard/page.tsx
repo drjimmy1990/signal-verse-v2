@@ -21,6 +21,10 @@ interface Signal {
   entry_price: number | null;
   candle_timestamp: string;
   signal_codes: string[];
+  hadena_timestamp: string | null;
+  metadata: {
+    hadena_type?: string;
+  } | null;
 }
 
 export default function DashboardPage() {

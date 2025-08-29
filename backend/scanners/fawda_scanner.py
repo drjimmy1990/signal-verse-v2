@@ -165,8 +165,8 @@ def generate_signal(symbol, tf, df, nakel_df=None):
         "candle_timestamp": df.index[-1].to_pydatetime().isoformat(),
         "entry_price": last_close,
         "status": "active",
-        # Per user request, hadena_timestamp is now ALWAYS recorded.
-        "hadena_timestamp": hadena_index.to_pydatetime().isoformat()
+        "hadena_timestamp": hadena_index.to_pydatetime().isoformat(),
+        "metadata": json.dumps({"hadena_type": hadena_type})
     }
 
     return final_signal
@@ -306,9 +306,9 @@ async def process_symbol_timeframe(session, store, symbol, tf, limit, semaphore)
             insert_signal(signal)
             print(f"✨ Manual signal inserted: {signal['signal_id']}")
 
-async def manual_scan_all_async(limit: int = 10):
+async def manual_scan_all_async(limit: int = 50):
     store = Store()
-    semaphore = asyncio.Semaphore(10)  # Limit to 10 concurrent requests
+    semaphore = asyncio.Semaphore(50)  # Limit to 25 concurrent requests
     async with aiohttp.ClientSession() as session:
         tasks = []
         for tf in MAIN_TIMEFRAMES:

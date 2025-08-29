@@ -21,6 +21,10 @@ interface Signal {
   entry_price: number | null;
   candle_timestamp: string;
   signal_codes: string[];
+  hadena_timestamp: string | null;
+  metadata: {
+    hadena_type?: string;
+  } | null;
 }
 
 export function DataTable({ signals, loading }: { signals: Signal[], loading: boolean }) {
@@ -35,12 +39,14 @@ export function DataTable({ signals, loading }: { signals: Signal[], loading: bo
           <TableHead>Entry Price</TableHead>
           <TableHead>Signal Codes</TableHead>
           <TableHead>Candle Timestamp</TableHead>
+          <TableHead>Hadena Type</TableHead>
+          <TableHead>Hadena Timestamp</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {loading ? (
           <TableRow>
-            <TableCell colSpan={7} className="text-center">
+            <TableCell colSpan={9} className="text-center">
               Loading...
             </TableCell>
           </TableRow>
@@ -72,11 +78,13 @@ export function DataTable({ signals, loading }: { signals: Signal[], loading: bo
                 </div>
               </TableCell>
               <TableCell>{new Date(signal.candle_timestamp).toLocaleString()}</TableCell>
+              <TableCell>{signal.metadata?.hadena_type ?? 'N/A'}</TableCell>
+              <TableCell>{signal.hadena_timestamp ? new Date(signal.hadena_timestamp).toLocaleString() : 'N/A'}</TableCell>
             </TableRow>
           ))
         ) : (
           <TableRow>
-            <TableCell colSpan={7} className="text-center">
+            <TableCell colSpan={9} className="text-center">
               No data available.
             </TableCell>
           </TableRow>
