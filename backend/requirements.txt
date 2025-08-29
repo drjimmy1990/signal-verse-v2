@@ -2,3 +2,6 @@ supabase
 websocket-client
 pandas
 numpy
+aiohttp
+scipy
+python-dotenv

@@ -3,6 +3,14 @@ import time
 import traceback
 from threading import Thread, Lock
 from datetime import datetime, timezone
+import asyncio
+import aiohttp
+import sys
+import os
+
+# Add project root to the Python path
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(project_root)
 
 import websocket
 import pandas as pd
@@ -54,14 +62,14 @@ def Nakel(ohlcv_df, nakel_klines_df):
     if previous_candle_length == 0: return ""
     error_margin = float(1/50 * previous_candle_length)
     signal_n = ""
-    if previous_candle["23.6"] - error_margin <= last_candle["Low"] <= previous_candle["23.6"] + error_margin: signal_n += "(W-B 23.6)🚀"
-    if previous_candle["76.4"] - error_margin <= last_candle["High"] <= previous_candle["76.4"] + error_margin: signal_n += "(W-S 76.4)🔻"
-    if previous_candle["-123.6"] - error_margin <= last_candle["Low"] <= previous_candle["-123.6"] + error_margin: signal_n += "(B 123.6)🚀"
-    if previous_candle["123.6"] - error_margin <= last_candle["High"] <= previous_candle["123.6"] + error_margin: signal_n += "(S 123.6)🔻"
-    if previous_candle["152.8"] - error_margin <= last_candle["High"] <= previous_candle["152.8"] + error_margin: signal_n += "(152.8--S)🔻"
-    if previous_candle["-152.8"] - error_margin <= last_candle["Low"] <= previous_candle["-152.8"] + error_margin: signal_n += "(152.8--B)🚀"
-    if previous_candle["176.4"] - error_margin <= last_candle["High"] <= previous_candle["176.4"] + error_margin: signal_n += "(176.4--S)🔻"
-    if previous_candle["-176.4"] - error_margin <= last_candle["Low"] <= previous_candle["-176.4"] + error_margin: signal_n += "(176.4--B)🚀"
+    if previous_candle["23.6"] - error_margin <= last_candle["Low"] <= previous_candle["23.6"] + error_margin: signal_n += "(W-B_23_6)🚀"
+    if previous_candle["76.4"] - error_margin <= last_candle["High"] <= previous_candle["76.4"] + error_margin: signal_n += "(W-S_76_4)🔻"
+    if previous_candle["-123.6"] - error_margin <= last_candle["Low"] <= previous_candle["-123.6"] + error_margin: signal_n += "(B_123_6)🚀"
+    if previous_candle["123.6"] - error_margin <= last_candle["High"] <= previous_candle["123.6"] + error_margin: signal_n += "(S_123_6)🔻"
+    if previous_candle["152.8"] - error_margin <= last_candle["High"] <= previous_candle["152.8"] + error_margin: signal_n += "(S_152_8)🔻"
+    if previous_candle["-152.8"] - error_margin <= last_candle["Low"] <= previous_candle["-152.8"] + error_margin: signal_n += "(B_152_8)🚀"
+    if previous_candle["176.4"] - error_margin <= last_candle["High"] <= previous_candle["176.4"] + error_margin: signal_n += "(S_176_4)🔻"
+    if previous_candle["-176.4"] - error_margin <= last_candle["Low"] <= previous_candle["-176.4"] + error_margin: signal_n += "(B_176_4)🚀"
     if last_candle_length <= (previous_candle_length / 2) and previous_candle["-123.6"] <= last_candle["Low"] < previous_candle["Low"]: signal_n += "(T-B)"
     if last_candle_length <= (previous_candle_length / 2) and previous_candle["123.6"] >= last_candle["High"] > previous_candle["High"]: signal_n += "(T-S)"
     if last_candle_length > (previous_candle_length / 2) and previous_candle["-123.6"] + error_margin < last_candle["Low"] < previous_candle["Low"]: signal_n += "(FB-B)"
@@ -76,12 +84,12 @@ def Nakel(ohlcv_df, nakel_klines_df):
             peak_row = nakel_klines_df.iloc[idx]
             if last_candle["76.4"] - error_margin_advanced <= peak_row["High"] <= last_candle["76.4"] + error_margin_advanced:
                 if all(nakel_klines_df.iloc[idx:]["High"].values <= peak_row["High"]):
-                    if "(S 76.4)" not in signal_n: signal_n += "(S 76.4)🔻🔻"
+                    if "(S_76_4)" not in signal_n: signal_n += "(S_76_4)🔻🔻"
         for idx in minima_indices:
             valley_row = nakel_klines_df.iloc[idx]
             if last_candle["23.6"] - error_margin_advanced <= valley_row["Low"] <= last_candle["23.6"] + error_margin_advanced:
                 if all(nakel_klines_df.iloc[idx:]["Low"].values >= valley_row["Low"]):
-                    if "(B 23.6)" not in signal_n: signal_n += "(B 23.6)🚀🚀"
+                    if "(B_23_6)" not in signal_n: signal_n += "(B_23_6)🚀🚀"
     except Exception:
         pass
     return signal_n
@@ -89,7 +97,7 @@ def Nakel(ohlcv_df, nakel_klines_df):
 # =========================
 # CONFIG
 # =========================
-SYMBOLS =  ['btcusdt', 'ethusdt', 'bchusdt']
+SYMBOLS =  ['btcusdt', 'ethusdt', 'bchusdt', 'xrpusdt', 'ltcusdt', 'trxusdt', 'etcusdt', 'linkusdt', 'xlmusdt', 'adausdt', 'xmrusdt', 'dashusdt', 'zecusdt', 'xtzusdt', 'bnbusdt', 'atomusdt', 'ontusdt', 'iotausdt', 'batusdt', 'vetusdt', 'neousdt', 'qtumusdt', 'iostusdt', 'thetausdt', 'algousdt', 'zilusdt', 'kncusdt', 'zrxusdt', 'compusdt', 'dogeusdt', 'sxpusdt', 'kavausdt', 'bandusdt', 'rlcusdt', 'mkrusdt', 'snxusdt', 'dotusdt', 'yfiusdt', 'crvusdt', 'trbusdt', 'runeusdt', 'sushiusdt', 'egldusdt', 'solusdt', 'icxusdt', 'storjusdt', 'uniusdt', 'avaxusdt', 'enjusdt', 'flmusdt', 'ksmusdt', 'nearusdt', 'aaveusdt', 'filusdt', 'rsrusdt', 'lrcusdt', 'belusdt', 'axsusdt', 'alphausdt', 'zenusdt', 'sklusdt', 'grtusdt', '1inchusdt', 'chzusdt', 'sandusdt', 'ankrusdt', 'rvnusdt', 'sfpusdt', 'cotiusdt', 'chrusdt', 'manausdt', 'aliceusdt', 'hbarusdt', 'oneusdt', 'dentusdt', 'celrusdt', 'hotusdt', 'mtlusdt', 'ognusdt', 'nknusdt', '1000shibusdt', 'bakeusdt', 'gtcusdt', 'btcdomusdt', 'iotxusdt', 'c98usdt', 'maskusdt', 'atausdt', 'dydxusdt', '1000xecusdt', 'galausdt', 'celousdt', 'arusdt', 'arpausdt', 'ctsiusdt', 'lptusdt', 'ensusdt', 'peopleusdt', 'roseusdt', 'duskusdt', 'flowusdt', 'imxusdt', 'api3usdt', 'gmtusdt', 'apeusdt', 'woousdt', 'jasmyusdt', 'opusdt', 'injusdt', 'stgusdt', 'spellusdt', '1000luncusdt', 'luna2usdt', 'ldousdt', 'icpusdt', 'aptusdt', 'qntusdt', 'fetusdt', 'fxsusdt', 'hookusdt', 'magicusdt', 'tusdt', 'highusdt', 'minausdt', 'astrusdt', 'phbusdt', 'gmxusdt', 'cfxusdt', 'stxusdt', 'achusdt', 'ssvusdt', 'ckbusdt', 'perpusdt', 'truusdt', 'lqtyusdt', 'usdcusdt', 'idusdt', 'arbusdt', 'joeusdt', 'tlmusdt', 'leverusdt', 'rdntusdt', 'hftusdt', 'xvsusdt', 'blurusdt', 'eduusdt', 'suiusdt', '1000pepeusdt', '1000flokiusdt', 'umausdt', 'nmrusdt', 'mavusdt', 'xvgusdt', 'wldusdt', 'pendleusdt', 'arkmusdt', 'agldusdt', 'yggusdt', 'dodoxusdt', 'bntusdt', 'oxtusdt', 'seiusdt', 'cyberusdt', 'hifiusdt', 'arkusdt', 'bicousdt', 'bigtimeusdt', 'waxpusdt', 'bsvusdt', 'rifusdt', 'polyxusdt', 'gasusdt', 'powrusdt', 'tiausdt', 'cakeusdt', 'memeusdt', 'twtusdt', 'tokenusdt', 'ordiusdt', 'steemusdt', 'ilvusdt', 'ntrnusdt', 'kasusdt', 'beamxusdt', '1000bonkusdt', 'pythusdt', 'superusdt', 'ustcusdt', 'ongusdt', 'ethwusdt', 'jtousdt', '1000satsusdt', 'auctionusdt', '1000ratsusdt', 'aceusdt', 'movrusdt', 'nfpusdt', 'aiusdt', 'xaiusdt', 'wifusdt', 'mantausdt', 'ondousdt', 'lskusdt', 'altusdt', 'jupusdt', 'zetausdt', 'roninusdt', 'dymusdt', 'omusdt', 'pixelusdt', 'strkusdt', 'glmusdt', 'portalusdt', 'tonusdt', 'axlusdt', 'myrousdt', 'metisusdt', 'aevousdt', 'vanryusdt', 'bomeusdt', 'ethfiusdt', 'enausdt', 'wusdt', 'tnsrusdt', 'sagausdt', 'taousdt', 'omniusdt', 'rezusdt', 'bbusdt', 'notusdt', 'turbousdt', 'iousdt', 'zkusdt', 'mewusdt', 'listausdt', 'zrousdt', 'renderusdt', 'bananausdt', 'rareusdt', 'gusdt', 'synusdt', 'sysusdt', 'voxelusdt', 'brettusdt', 'popcatusdt', 'sunusdt', 'dogsusdt', 'mboxusdt', 'chessusdt', 'fluxusdt', 'bswusdt', 'quickusdt', 'neiroethusdt', 'rplusdt', 'polusdt', 'uxlinkusdt', '1mbabydogeusdt', 'neirousdt', 'kdausdt', 'fidausdt', 'fiousdt', 'catiusdt', 'ghstusdt', 'hmstrusdt', 'reiusdt', 'cosusdt', 'eigenusdt', 'diausdt', '1000catusdt', 'scrusdt', 'goatusdt', 'moodengusdt', 'safeusdt', 'santosusdt', 'ponkeusdt', 'cowusdt', 'cetususdt', '1000000mogusdt', 'grassusdt', 'driftusdt', 'swellusdt', 'actusdt', 'pnutusdt', 'hippousdt', '1000xusdt', 'degenusdt', 'banusdt', 'aktusdt', 'slerfusdt', 'scrtusdt', '1000cheemsusdt', '1000whyusdt', 'theusdt', 'morphousdt', 'chillguyusdt', 'kaiausdt', 'aerousdt', 'acxusdt', 'orcausdt', 'moveusdt', 'raysolusdt', 'komausdt', 'virtualusdt', 'spxusdt', 'meusdt', 'avausdt', 'degousdt', 'velodromeusdt', 'mocausdt', 'vanausdt', 'penguusdt', 'lumiausdt', 'usualusdt', 'aixbtusdt', 'fartcoinusdt', 'kmnousdt', 'cgptusdt', 'hiveusdt', 'dexeusdt', 'phausdt', 'dfusdt', 'griffainusdt', 'ai16zusdt', 'zerebrousdt', 'biousdt', 'cookieusdt', 'alchusdt', 'swarmsusdt', 'sonicusdt', 'dusdt', 'promusdt', 'susdt', 'solvusdt', 'arcusdt', 'avaaiusdt', 'trumpusdt', 'melaniausdt', 'vthousdt', 'animeusdt', 'vineusdt', 'pippinusdt', 'vvvusdt', 'berausdt', 'tstusdt', 'layerusdt', 'heiusdt', 'b3usdt', 'ipusdt', 'gpsusdt', 'shellusdt', 'kaitousdt', 'redusdt', 'vicusdt', 'epicusdt', 'bmtusdt', 'mubarakusdt', 'formusdt', 'bidusdt', 'tutusdt', 'broccoli714usdt', 'broccolif3busdt', 'sirenusdt', 'bananas31usdt', 'brusdt', 'plumeusdt', 'nilusdt', 'partiusdt', 'jellyjellyusdt', 'maviausdt', 'paxgusdt', 'walusdt', 'btcusdt_250926', 'ethusdt_250926', 'funusdt', 'mlnusdt', 'gunusdt', 'athusdt', 'babyusdt', 'forthusdt', 'promptusdt', 'xcnusdt', 'stousdt', 'fheusdt', 'kernelusdt', 'wctusdt', 'initusdt', 'aergousdt', 'bankusdt', 'eptusdt', 'deepusdt', 'hyperusdt', 'fisusdt', 'jstusdt', 'signusdt', 'pundixusdt', 'ctkusdt', 'aiotusdt', 'dolousdt', 'haedalusdt', 'sxtusdt', 'asrusdt', 'alpineusdt', 'b2usdt', 'milkusdt', 'syrupusdt', 'obolusdt', 'doodusdt', 'ogusdt', 'zkjusdt', 'skyaiusdt', 'nxpcusdt', 'cvcusdt', 'agtusdt', 'aweusdt', 'busdt', 'soonusdt', 'humausdt', 'ausdt', 'sophusdt', 'merlusdt', 'hypeusdt', 'bdxnusdt', 'pufferusdt', 'port3usdt', '1000000bobusdt', 'lausdt', 'skateusdt', 'homeusdt', 'resolvusdt', 'taikousdt', 'sqdusdt', 'pumpbtcusdt', 'spkusdt', 'myxusdt', 'fusdt', 'newtusdt', 'dmcusdt', 'husdt', 'olusdt', 'saharausdt', 'btcusdt_251226', 'ethusdt_251226', 'icntusdt', 'bullausdt', 'idolusdt', 'musdt', 'tanssiusdt', 'pumpusdt', 'crossusdt', 'ainusdt', 'cusdt', 'velvetusdt', 'tacusdt', 'erausdt', 'tausdt', 'cvxusdt', 'slpusdt', 'zorausdt', 'tagusdt', 'zrcusdt', 'esportsusdt', 'treeusdt', 'a2zusdt', 'playusdt', 'naorisusdt', 'townsusdt', 'proveusdt', 'allusdt', 'inusdt', 'yalausdt', 'carvusdt', 'aiousdt', 'xnyusdt', 'uselessusdt', 'damusdt', 'cudisusdt', 'sapienusdt', 'xplusdt', 'wlfiusdt', 'somiusdt', 'basusdt', 'btrusdt']
 MAIN_TIMEFRAMES = ["15m", "1h", "4h", "1d"]
 NAKEL_MINOR_FOR = {
     "15m": "1m",
@@ -126,24 +134,29 @@ def generate_signal(symbol, tf, df, nakel_df=None):
             fibs = fibonacci_levels(row["High"], row["Low"])
             for level, value in fibs.items():
                 df.loc[i, level] = value
-    nakel_signal = Nakel(df, nakel_df)
+
+    # --- Signal Processing ---
+    nakel_signal_str = Nakel(df, nakel_df)
     hadena_type, hadena_signal, hadena_index = signal_gen(df)
-    if not nakel_signal and not hadena_signal:
-        return None
-    last_close = df.iloc[-1]["Close"]
+
     signal_codes = []
-    if nakel_signal:
-        # Split concatenated signals like "(W-B 23.6)🚀(FB-B)" into individual codes
-        import re
-        matches = re.findall(r"\((.*?)\)", nakel_signal)
-        for m in matches:
-            # Remove emojis and keep only the code text
-            clean_code = re.sub(r"[^\w\s\-\.\%]", "", m).strip()
-            if clean_code:
-                signal_codes.append(clean_code)
+    if nakel_signal_str:
+        ascii_str = nakel_signal_str.encode('ascii', 'ignore').decode('ascii')
+        codes = ascii_str.replace('(', ' ').replace(')', ' ').split()
+        signal_codes.extend(codes)
+
+    # If a hadena SIGNAL is triggered, add its type to the codes.
     if hadena_signal:
         signal_codes.append(hadena_type)
-    return {
+
+    # --- Final Check ---
+    # A record should be generated if there is ANY Nakel or Hadena signal.
+    if not nakel_signal_str and not hadena_signal:
+        return None
+
+    # --- Construct Final Object ---
+    last_close = df.iloc[-1]["Close"]
+    final_signal = {
         "scanner_type": "fawda",
         "symbol": symbol.upper(),
         "timeframe": tf,
@@ -152,8 +165,11 @@ def generate_signal(symbol, tf, df, nakel_df=None):
         "candle_timestamp": df.index[-1].to_pydatetime().isoformat(),
         "entry_price": last_close,
         "status": "active",
-        "metadata": json.dumps({"nakel": nakel_signal, "hadena": hadena_signal})
+        # Per user request, hadena_timestamp is now ALWAYS recorded.
+        "hadena_timestamp": hadena_index.to_pydatetime().isoformat()
     }
+
+    return final_signal
 
 # =========================
 # DATA STORE
@@ -240,51 +256,69 @@ class FawdaScannerWS:
             time.sleep(5)
 
 # =========================
-# MANUAL SCAN FUNCTION
+# MANUAL SCAN FUNCTION (OPTIMIZED)
 # =========================
-import requests
+
+async def fetch_klines(session, symbol, tf, limit):
+    base_url = "https://fapi.binance.com/fapi/v1/klines"
+    params = {"symbol": symbol.upper(), "interval": tf, "limit": limit}
+    try:
+        async with session.get(base_url, params=params) as resp:
+            resp.raise_for_status()
+            return await resp.json()
+    except aiohttp.ClientError as e:
+        print(f"⚠️  Error fetching {symbol.upper()} {tf}: {e}")
+        return None
+
+async def process_symbol_timeframe(session, store, symbol, tf, limit, semaphore):
+    async with semaphore:
+        main_data = await fetch_klines(session, symbol, tf, limit)
+        if not isinstance(main_data, list):
+            return
+
+        df = pd.DataFrame(
+            [[k[0], float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])] for k in main_data],
+            columns=["OpenTime", "Open", "High", "Low", "Close", "Volume"]
+        )
+        df["OpenTime"] = pd.to_datetime(df["OpenTime"], unit="ms", utc=True)
+        df.set_index("OpenTime", inplace=True)
+        for i, row in df.iterrows():
+            store.append_closed(symbol, tf, i, row["Open"], row["High"], row["Low"], row["Close"], row["Volume"])
+
+        minor_tf = NAKEL_MINOR_FOR.get(tf)
+        minor_df = None
+        if minor_tf:
+            minor_data = await fetch_klines(session, symbol, minor_tf, limit * 50)
+            if isinstance(minor_data, list):
+                dfm = pd.DataFrame(
+                    [[k[0], float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])] for k in minor_data],
+                    columns=["OpenTime", "Open", "High", "Low", "Close", "Volume"]
+                )
+                dfm["OpenTime"] = pd.to_datetime(dfm["OpenTime"], unit="ms", utc=True)
+                dfm.set_index("OpenTime", inplace=True)
+                for i, row in dfm.iterrows():
+                    store.append_closed(symbol, minor_tf, i, row["Open"], row["High"], row["Low"], row["Close"], row["Volume"])
+                minor_df = store.get_df(symbol, minor_tf)
+
+        df_with_fibs = store.get_df(symbol, tf)
+        signal = generate_signal(symbol, tf, df_with_fibs, minor_df)
+        if signal:
+            insert_signal(signal)
+            print(f"✨ Manual signal inserted: {signal['signal_id']}")
+
+async def manual_scan_all_async(limit: int = 10):
+    store = Store()
+    semaphore = asyncio.Semaphore(10)  # Limit to 10 concurrent requests
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+        for tf in MAIN_TIMEFRAMES:
+            for symbol in SYMBOLS:
+                tasks.append(process_symbol_timeframe(session, store, symbol, tf, limit, semaphore))
+        await asyncio.gather(*tasks)
 
 def manual_scan_all(limit: int = 10):
-    base_url = "https://fapi.binance.com/fapi/v1/klines"
-    store = Store()
-    for tf in MAIN_TIMEFRAMES:
-        minor_tf = NAKEL_MINOR_FOR.get(tf)
-        for idx, symbol in enumerate(SYMBOLS):
-            try:
-                resp = requests.get(base_url, params={"symbol": symbol.upper(), "interval": tf, "limit": limit})
-                data = resp.json()
-                if isinstance(data, list):
-                    df = pd.DataFrame(
-                        [[k[0], float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])] for k in data],
-                        columns=["OpenTime", "Open", "High", "Low", "Close", "Volume"]
-                    )
-                    df["OpenTime"] = pd.to_datetime(df["OpenTime"], unit="ms", utc=True)
-                    df.set_index("OpenTime", inplace=True)
-                    for i, row in df.iterrows():
-                        store.append_closed(symbol, tf, i, row["Open"], row["High"], row["Low"], row["Close"], row["Volume"])
-                if minor_tf:
-                    resp_minor = requests.get(base_url, params={"symbol": symbol.upper(), "interval": minor_tf, "limit": limit*50})
-                    data_minor = resp_minor.json()
-                    if isinstance(data_minor, list):
-                        dfm = pd.DataFrame(
-                            [[k[0], float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])] for k in data_minor],
-                            columns=["OpenTime", "Open", "High", "Low", "Close", "Volume"]
-                        )
-                        dfm["OpenTime"] = pd.to_datetime(dfm["OpenTime"], unit="ms", utc=True)
-                        dfm.set_index("OpenTime", inplace=True)
-                        for i, row in dfm.iterrows():
-                            store.append_closed(symbol, minor_tf, i, row["Open"], row["High"], row["Low"], row["Close"], row["Volume"])
-                df_with_fibs = store.get_df(symbol, tf)
-                minor_df = store.get_df(symbol, minor_tf) if minor_tf else None
-                signal = generate_signal(symbol, tf, df_with_fibs, minor_df)
-                if signal:
-                    insert_signal(signal)
-                    print(f"✨ Manual signal inserted: {signal['signal_id']}")
-            except Exception as e:
-                print(f"⚠️ Error seeding {symbol.upper()} {tf}: {e}")
-            if idx % 50 == 0 and idx > 0:
-                time.sleep(0.5)
-        time.sleep(0.5)
+    asyncio.run(manual_scan_all_async(limit))
+
 
 # =========================
 # MAIN
@@ -292,7 +326,14 @@ def manual_scan_all(limit: int = 10):
 if __name__ == "__main__":
     print("Fawda WebSocket Scanner starting...")
 
-    manual_scan_all(limit=10)
+    # The initial scan can be very slow. Use --no-scan to skip it.
+    if "--no-scan" not in sys.argv:
+        print("Starting initial scan for historical data. This may take a while...")
+        print("To skip this in the future, run with the --no-scan flag.")
+        manual_scan_all(limit=10)
+        print("Initial scan complete.")
+    else:
+        print("Skipping initial scan.")
 
     streams_per_symbol = len(MAIN_TIMEFRAMES)
     max_symbols_per_socket = max(1, MAX_STREAMS_PER_SOCKET // streams_per_symbol)
@@ -311,3 +352,4 @@ if __name__ == "__main__":
             time.sleep(60)
     except KeyboardInterrupt:
         print("\nScanner shutting down.")
+
