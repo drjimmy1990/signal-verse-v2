@@ -1,0 +1,4 @@
+supabase
+websocket-client
+pandas
+numpy

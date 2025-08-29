@@ -1,0 +1,88 @@
+create table if not exists signals (
+    id uuid primary key default gen_random_uuid(),
+    scanner_type text not null,
+    symbol text not null,
+    timeframe text not null,
+    signal_codes text[] not null,
+    signal_id text unique not null,
+    candle_timestamp timestamptz not null,
+    hadena_timestamp timestamptz null,
+    entry_price numeric null,
+    status text default 'active',
+    metadata jsonb null
+);
+
+-- Indexes
+create index if not exists idx_signals_scanner_type on signals(scanner_type);
+create index if not exists idx_signals_symbol on signals(symbol);
+create index if not exists idx_signals_timeframe on signals(timeframe);
+create index if not exists idx_signals_status on signals(status);
+create index if not exists idx_signals_signal_codes on signals using gin (signal_codes);
+
+----------------------------------------------------
+
+create table if not exists scanner_configs (
+    id uuid primary key default gen_random_uuid(),
+    scanner_id text unique not null,
+    name text not null,
+    description text null,
+    is_active boolean not null,
+    config jsonb null,
+    last_run_timestamp timestamptz null,
+    last_run_status text null,
+    last_error_message text null
+);
+
+
+--------------------------------------------------
+
+
+
+create table if not exists user_profiles (
+    id uuid primary key default auth.uid(),
+    subscription_tier text default 'free',
+    preferences jsonb null
+);
+
+-- RLS: Only allow users to access their own profile
+alter table user_profiles enable row level security;
+
+create policy "Users can view their own profile"
+on user_profiles for select
+using (id = auth.uid());
+
+create policy "Users can update their own profile"
+on user_profiles for update
+using (id = auth.uid());
+
+
+
+-------------------------------------------------------
+
+
+create table if not exists alerts (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid references auth.users(id) on delete cascade,
+    filters jsonb not null,
+    is_active boolean not null,
+    created_at timestamptz default now()
+);
+
+-- RLS: Only allow users to manage their own alerts
+alter table alerts enable row level security;
+
+create policy "Users can view their own alerts"
+on alerts for select
+using (user_id = auth.uid());
+
+create policy "Users can insert their own alerts"
+on alerts for insert
+with check (user_id = auth.uid());
+
+create policy "Users can update their own alerts"
+on alerts for update
+using (user_id = auth.uid());
+
+create policy "Users can delete their own alerts"
+on alerts for delete
+using (user_id = auth.uid());
