@@ -7,6 +7,7 @@ import asyncio
 import aiohttp
 import sys
 import os
+from concurrent.futures import ProcessPoolExecutor
 
 # Add project root to the Python path
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -255,27 +256,40 @@ class FawdaScannerWS:
                 print(f"WS app error: {e}")
             time.sleep(5)
 
+from concurrent.futures import ProcessPoolExecutor
+
 # =========================
-# MANUAL SCAN FUNCTION (OPTIMIZED)
+# MANUAL SCAN FUNCTION (REFACTORED FOR PARALLELISM)
 # =========================
 
-async def fetch_klines(session, symbol, tf, limit):
-    base_url = "https://fapi.binance.com/fapi/v1/klines"
-    params = {"symbol": symbol.upper(), "interval": tf, "limit": limit}
+# This function needs to be at the top level for multiprocessing to work.
+# It's a self-contained task that processes one symbol/timeframe combination.
+def run_process_for_symbol(args):
+    """
+    Worker function to be executed in a separate process.
+    Fetches klines and generates a signal for a single symbol/timeframe.
+    """
+    symbol, tf, limit = args
+    # asyncio.run is used to execute the async logic within this synchronous worker process.
     try:
-        async with session.get(base_url, params=params) as resp:
-            resp.raise_for_status()
-            return await resp.json()
-    except aiohttp.ClientError as e:
-        print(f"⚠️  Error fetching {symbol.upper()} {tf}: {e}")
+        signal = asyncio.run(fetch_and_process_single(symbol, tf, limit))
+        return signal
+    except Exception as e:
+        # print(f"Error processing {symbol} {tf}: {e}") # Optional: for debugging
         return None
 
-async def process_symbol_timeframe(session, store, symbol, tf, limit, semaphore):
-    async with semaphore:
+async def fetch_and_process_single(symbol, tf, limit):
+    """
+    The core async logic for fetching and processing data for one task.
+    """
+    local_store = Store() # Each process gets its own in-memory store.
+    
+    async with aiohttp.ClientSession() as session:
         main_data = await fetch_klines(session, symbol, tf, limit)
-        if not isinstance(main_data, list):
-            return
+        if not isinstance(main_data, list) or len(main_data) < 3:
+            return None
 
+        # Process main timeframe data
         df = pd.DataFrame(
             [[k[0], float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])] for k in main_data],
             columns=["OpenTime", "Open", "High", "Low", "Close", "Volume"]
@@ -283,8 +297,9 @@ async def process_symbol_timeframe(session, store, symbol, tf, limit, semaphore)
         df["OpenTime"] = pd.to_datetime(df["OpenTime"], unit="ms", utc=True)
         df.set_index("OpenTime", inplace=True)
         for i, row in df.iterrows():
-            store.append_closed(symbol, tf, i, row["Open"], row["High"], row["Low"], row["Close"], row["Volume"])
+            local_store.append_closed(symbol, tf, i, row["Open"], row["High"], row["Low"], row["Close"], row["Volume"])
 
+        # Process minor timeframe data for Nakel
         minor_tf = NAKEL_MINOR_FOR.get(tf)
         minor_df = None
         if minor_tf:
@@ -296,28 +311,50 @@ async def process_symbol_timeframe(session, store, symbol, tf, limit, semaphore)
                 )
                 dfm["OpenTime"] = pd.to_datetime(dfm["OpenTime"], unit="ms", utc=True)
                 dfm.set_index("OpenTime", inplace=True)
-                for i, row in dfm.iterrows():
-                    store.append_closed(symbol, minor_tf, i, row["Open"], row["High"], row["Low"], row["Close"], row["Volume"])
-                minor_df = store.get_df(symbol, minor_tf)
+                minor_df = dfm
 
-        df_with_fibs = store.get_df(symbol, tf)
-        signal = generate_signal(symbol, tf, df_with_fibs, minor_df)
-        if signal:
-            insert_signal(signal)
-            print(f"✨ Manual signal inserted: {signal['signal_id']}")
+    # Generate signal using the locally built dataframes
+    df_with_fibs = local_store.get_df(symbol, tf)
+    signal = generate_signal(symbol, tf, df_with_fibs, minor_df)
+    
+    return signal
 
-async def manual_scan_all_async(limit: int = 50):
-    store = Store()
-    semaphore = asyncio.Semaphore(50)  # Limit to 25 concurrent requests
-    async with aiohttp.ClientSession() as session:
-        tasks = []
-        for tf in MAIN_TIMEFRAMES:
-            for symbol in SYMBOLS:
-                tasks.append(process_symbol_timeframe(session, store, symbol, tf, limit, semaphore))
-        await asyncio.gather(*tasks)
+
+async def fetch_klines(session, symbol, tf, limit):
+    base_url = "https://fapi.binance.com/fapi/v1/klines"
+    params = {"symbol": symbol.upper(), "interval": tf, "limit": limit}
+    try:
+        async with session.get(base_url, params=params) as resp:
+            resp.raise_for_status()
+            return await resp.json()
+    except aiohttp.ClientError:
+        return None
 
 def manual_scan_all(limit: int = 10):
-    asyncio.run(manual_scan_all_async(limit))
+    """
+    Uses a ProcessPoolExecutor to run the initial scan in parallel across multiple CPU cores.
+    """
+    print("Preparing tasks for parallel processing...")
+    tasks = [(symbol, tf, limit) for tf in MAIN_TIMEFRAMES for symbol in SYMBOLS]
+    
+    all_signals = []
+    
+    with ProcessPoolExecutor(max_workers=8) as executor:
+        results = executor.map(run_process_for_symbol, tasks)
+        
+        for signal in results:
+            if signal:
+                all_signals.append(signal)
+
+    if all_signals:
+        print(f"Found {len(all_signals)} signals in total. Performing batch insert...")
+        try:
+            insert_signal(all_signals)
+            print(f"✅ Successfully inserted {len(all_signals)} signals.")
+        except Exception as e:
+            print(f"❌ Error during batch insert: {e}")
+    else:
+        print("No signals found during initial scan.")
 
 
 # =========================

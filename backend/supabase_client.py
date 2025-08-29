@@ -14,9 +14,9 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
 # Create Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-def insert_signal(signal_data: dict):
+def insert_signal(signal_data: dict | list[dict]):
     """
-    Insert a new signal into the signals table.
+    Insert a new signal or a list of signals into the signals table.
     signal_data should include:
       - scanner_type
       - symbol
