@@ -41,23 +41,35 @@ def update_hadena(df, hadena, bullish_hadena, bearish_hadena):
             hadena, bearish_hadena = index, index
     return hadena, bullish_hadena, bearish_hadena
 
-def signal_gen(df):
-    if len(df) < 2: return None, None, None
+def signal_gen(df, is_historical_scan=False):
+    if is_historical_scan:
+        if len(df) < 3: return None, None, None
+        candle_to_check = df.iloc[-2]
+    else:
+        if len(df) < 2: return None, None, None
+        candle_to_check = df.iloc[-1]
+
     hadena = bullish_hadena = bearish_hadena = df.index[0]
     hadena, bullish_hadena, bearish_hadena = update_hadena(df, hadena, bullish_hadena, bearish_hadena)
     signal, hadena_type = "", None
     if hadena == bearish_hadena:
         hadena_type = "Bearish"
-        if df.iloc[-1]['Close'] > df.loc[bearish_hadena, '100']: signal = "Bearish"
+        if candle_to_check['Close'] > df.loc[bearish_hadena, '100']: signal = "Bearish"
     elif hadena == bullish_hadena:
         hadena_type = "Bullish"
-        if df.iloc[-1]['Close'] < df.loc[bullish_hadena, '0']: signal = "Bullish"
+        if candle_to_check['Close'] < df.loc[bullish_hadena, '0']: signal = "Bullish"
     if hadena_type == signal: return hadena_type, signal, hadena
     return hadena_type, None, hadena
 
-def Nakel(ohlcv_df, nakel_klines_df):
-    if len(ohlcv_df) < 2: return ""
-    last_candle, previous_candle = ohlcv_df.iloc[-1], ohlcv_df.iloc[-2]
+def Nakel(ohlcv_df, nakel_klines_df, is_historical_scan=False):
+    if is_historical_scan:
+        if len(ohlcv_df) < 3: return ""
+        # For historical, compare the 2nd to last candle against the 3rd to last
+        last_candle, previous_candle = ohlcv_df.iloc[-2], ohlcv_df.iloc[-3]
+    else:
+        if len(ohlcv_df) < 2: return ""
+        # For live, compare the latest candle against the previous one
+        last_candle, previous_candle = ohlcv_df.iloc[-1], ohlcv_df.iloc[-2]
     last_candle_length = float(last_candle["High"] - last_candle["Low"])
     previous_candle_length = float(previous_candle["High"] - previous_candle["Low"])
     if previous_candle_length == 0: return ""
@@ -127,9 +139,17 @@ def timeframe_to_millis(tf_str):
 # =========================
 # SIGNAL ENGINE (Nakel + Hadena integrated)
 # =========================
-def generate_signal(symbol, tf, df, nakel_df=None):
-    if len(df) < 3:
-        return None
+def generate_signal(symbol, tf, df, nakel_df=None, is_historical_scan=False):
+    # Determine the correct candle to check based on the context
+    if is_historical_scan:
+        if len(df) < 3: return None
+        candle_to_check = df.iloc[-2]
+        candle_timestamp = df.index[-2]
+    else:
+        if len(df) < 2: return None
+        candle_to_check = df.iloc[-1]
+        candle_timestamp = df.index[-1]
+
     if "23.6" not in df.columns:
         for i, row in df.iterrows():
             fibs = fibonacci_levels(row["High"], row["Low"])
@@ -137,8 +157,8 @@ def generate_signal(symbol, tf, df, nakel_df=None):
                 df.loc[i, level] = value
 
     # --- Signal Processing ---
-    nakel_signal_str = Nakel(df, nakel_df)
-    hadena_type, hadena_signal, hadena_index = signal_gen(df)
+    nakel_signal_str = Nakel(df, nakel_df, is_historical_scan=is_historical_scan)
+    hadena_type, hadena_signal, hadena_index = signal_gen(df, is_historical_scan=is_historical_scan)
 
     signal_codes = []
     if nakel_signal_str:
@@ -156,15 +176,15 @@ def generate_signal(symbol, tf, df, nakel_df=None):
         return None
 
     # --- Construct Final Object ---
-    last_close = df.iloc[-1]["Close"]
+    entry_price = candle_to_check["Close"]
     final_signal = {
         "scanner_type": "fawda",
         "symbol": symbol.upper(),
         "timeframe": tf,
         "signal_codes": signal_codes,
         "signal_id": f"fawda-{symbol}-{tf}-{int(time.time())}",
-        "candle_timestamp": df.index[-1].to_pydatetime().isoformat(),
-        "entry_price": last_close,
+        "candle_timestamp": candle_timestamp.to_pydatetime().isoformat(),
+        "entry_price": entry_price,
         "status": "active",
         "hadena_timestamp": hadena_index.to_pydatetime().isoformat(),
         "metadata": json.dumps({"hadena_type": hadena_type})
@@ -233,7 +253,7 @@ class FawdaScannerWS:
             nakel_df = None
             if minor_tf:
                 nakel_df = self.store.get_df(symbol, minor_tf)
-            signal = generate_signal(symbol, tf, df, nakel_df)
+            signal = generate_signal(symbol, tf, df, nakel_df, is_historical_scan=False)
             if signal:
                 insert_signal(signal)
                 with PRINT_LOCK:
@@ -315,7 +335,7 @@ async def fetch_and_process_single(symbol, tf, limit):
 
     # Generate signal using the locally built dataframes
     df_with_fibs = local_store.get_df(symbol, tf)
-    signal = generate_signal(symbol, tf, df_with_fibs, minor_df)
+    signal = generate_signal(symbol, tf, df_with_fibs, minor_df, is_historical_scan=True)
     
     return signal
 
@@ -339,7 +359,7 @@ def manual_scan_all(limit: int = 10):
     
     all_signals = []
     
-    with ProcessPoolExecutor(max_workers=8) as executor:
+    with ProcessPoolExecutor(max_workers=5) as executor:
         results = executor.map(run_process_for_symbol, tasks)
         
         for signal in results:

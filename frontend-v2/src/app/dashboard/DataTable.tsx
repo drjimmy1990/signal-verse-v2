@@ -22,7 +22,7 @@ interface Signal {
   candle_timestamp: string;
   signal_codes: string[];
   hadena_timestamp: string | null;
-  metadata: {
+  metadata: string | {
     hadena_type?: string;
   } | null;
 }
@@ -78,7 +78,19 @@ export function DataTable({ signals, loading }: { signals: Signal[], loading: bo
                 </div>
               </TableCell>
               <TableCell>{new Date(signal.candle_timestamp).toLocaleString()}</TableCell>
-              <TableCell>{signal.metadata?.hadena_type ?? 'N/A'}</TableCell>
+              <TableCell>
+                {(() => {
+                  if (!signal.metadata) return 'N/A';
+                  try {
+                    const meta = typeof signal.metadata === 'string'
+                      ? JSON.parse(signal.metadata)
+                      : signal.metadata;
+                    return meta?.hadena_type ?? 'N/A';
+                  } catch {
+                    return 'Error';
+                  }
+                })()}
+              </TableCell>
               <TableCell>{signal.hadena_timestamp ? new Date(signal.hadena_timestamp).toLocaleString() : 'N/A'}</TableCell>
             </TableRow>
           ))

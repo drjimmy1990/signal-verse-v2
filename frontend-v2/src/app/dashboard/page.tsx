@@ -22,7 +22,7 @@ interface Signal {
   candle_timestamp: string;
   signal_codes: string[];
   hadena_timestamp: string | null;
-  metadata: {
+  metadata: string | {
     hadena_type?: string;
   } | null;
 }
